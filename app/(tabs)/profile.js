@@ -1,6 +1,7 @@
 import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import { saveAllergies, getAllergies } from '../../utils/storage';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const Profile = () => {
   const [allergies, setAllergies] = useState([]);
@@ -31,48 +32,53 @@ const Profile = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>My Health Profile</Text>
-      
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          value={newAllergy}
-          onChangeText={setNewAllergy}
-          placeholder="Enter allergy or condition..."
-          placeholderTextColor="#666"
-        />
-        <TouchableOpacity style={styles.addButton} onPress={addAllergy}>
-          <Text style={styles.addButtonText}>Add</Text>
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <Text style={styles.title}>My Health Profile</Text>
+        
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            value={newAllergy}
+            onChangeText={setNewAllergy}
+            placeholder="Enter allergy or condition..."
+            placeholderTextColor="#666"
+          />
+          <TouchableOpacity style={styles.addButton} onPress={addAllergy}>
+            <Text style={styles.addButtonText}>Add</Text>
+          </TouchableOpacity>
+        </View>
 
-      <FlatList
-        data={allergies}
-        keyExtractor={(item, index) => index.toString()}
-        renderItem={({ item, index }) => (
-          <View style={styles.allergyItem}>
-            <Text style={styles.allergyText}>{item}</Text>
-            <TouchableOpacity 
-              style={styles.removeButton}
-              onPress={() => removeAllergy(index)}>
-              <Text style={styles.removeButtonText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No allergies or conditions added yet</Text>
-        }
-      />
-    </View>
+        <FlatList
+          data={allergies}
+          keyExtractor={(item, index) => index.toString()}
+          renderItem={({ item, index }) => (
+            <View style={styles.allergyItem}>
+              <Text style={styles.allergyText}>{item}</Text>
+              <TouchableOpacity 
+                style={styles.removeButton}
+                onPress={() => removeAllergy(index)}>
+                <Text style={styles.removeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>No allergies or conditions added yet</Text>
+          }
+        />
+      </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#fff',
   },
   title: {
     fontSize: 24,
