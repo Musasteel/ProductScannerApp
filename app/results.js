@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import { searchProduct, analyzeIngredients } from '../services/productService';
 import { getAllergies } from '../utils/storage';
 
+// Timeout duration in milliseconds
+const API_TIMEOUT = 10000;
+
 const SEVERITY_COLORS = {
   green: '#4CAF50',
   yellow: '#FFC107',
@@ -15,39 +18,84 @@ export default function Results() {
   const [product, setProduct] = useState(null);
   const [analysis, setAnalysis] = useState(null);
   const [error, setError] = useState(null);
+  const [timeoutOccurred, setTimeoutOccurred] = useState(false);
 
   useEffect(() => {
+    let timeoutId;
+    let isMounted = true;
+
+    const loadProductData = async () => {
+      try {
+        // Set timeout
+        timeoutId = setTimeout(() => {
+          if (isMounted && !product) {
+            setTimeoutOccurred(true);
+            setError('Request took too long. Please try again.');
+          }
+        }, API_TIMEOUT);
+
+        // Load product data
+        const productData = await searchProduct(barcode);
+        if (!isMounted) return;
+        
+        setProduct(productData);
+        
+        // Load allergies and analyze
+        const userAllergies = await getAllergies();
+        const analysisResult = await analyzeIngredients(
+          productData.ingredients,
+          userAllergies
+        );
+        
+        if (!isMounted) return;
+        setAnalysis(analysisResult);
+
+      } catch (err) {
+        if (!isMounted) return;
+        setError(err.message);
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+
     loadProductData();
+
+    // Cleanup
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
   }, [barcode]);
 
-  const loadProductData = async () => {
-    try {
-      // Load product data first
-      const productData = await searchProduct(barcode);
-      setProduct(productData);
-
-      // Then load allergies and analyze
-      const userAllergies = await getAllergies();
-      const analysisResult = await analyzeIngredients(
-        productData.ingredients,
-        userAllergies
-      );
-      setAnalysis(analysisResult);
-    } catch (err) {
-      setError(err.message);
-    }
+  const handleRetry = () => {
+    setError(null);
+    setTimeoutOccurred(false);
+    setProduct(null);
+    setAnalysis(null);
+    router.replace({
+      pathname: "/results",
+      params: { barcode }
+    });
   };
 
-  if (error) {
+  if (error || timeoutOccurred) {
     return (
       <View style={styles.container}>
         <Text style={styles.error}>{error}</Text>
-        <TouchableOpacity 
-          style={styles.retryButton} 
-          onPress={() => router.back()}
-        >
-          <Text style={styles.retryButtonText}>Try Again</Text>
-        </TouchableOpacity>
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity 
+            style={styles.retryButton} 
+            onPress={handleRetry}
+          >
+            <Text style={styles.retryButtonText}>Try Again</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.retryButton, styles.cancelButton]} 
+            onPress={() => router.back()}
+          >
+            <Text style={styles.retryButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -57,6 +105,7 @@ export default function Results() {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
         <Text style={styles.loadingText}>Loading product information...</Text>
+        <Text style={styles.loadingSubText}>This may take a few seconds</Text>
       </View>
     );
   }
@@ -122,11 +171,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: '#fff',
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
     color: '#666',
+  },
+  loadingSubText: {
+    marginTop: 5,
+    fontSize: 14,
+    color: '#999',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 20,
+  },
+  retryButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    minWidth: 100,
+  },
+  cancelButton: {
+    backgroundColor: '#FF3B30',
+  },
+  retryButtonText: {
+    color: 'white',
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   analyzingContainer: {
     flexDirection: 'row',
@@ -180,17 +257,5 @@ const styles = StyleSheet.create({
     color: 'red',
     textAlign: 'center',
     marginBottom: 20,
-  },
-  retryButton: {
-    backgroundColor: '#007AFF',
-    padding: 15,
-    borderRadius: 8,
-    marginHorizontal: 20,
-  },
-  retryButtonText: {
-    color: 'white',
-    textAlign: 'center',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
 });

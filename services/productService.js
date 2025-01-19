@@ -8,10 +8,15 @@ const openai = new OpenAI({
   apiKey: Constants.expoConfig.extra.openaiApiKey
 });
 
+// Create axios instance with timeout
+const api = axios.create({
+  timeout: 5000 // 5 second timeout
+});
+
 export const searchProduct = async (barcode) => {
   try {
-    // First check Open Food Facts API directly
-    const response = await axios.get(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+    // Directly fetch from Open Food Facts with shorter timeout
+    const response = await api.get(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
     
     if (response.data.status === 1) {
       const productData = {
@@ -22,29 +27,98 @@ export const searchProduct = async (barcode) => {
         allergens: response.data.product.allergens_tags || [],
       };
 
-      // Try to save to Firebase but don't wait for it
-      try {
-        const q = query(collection(db, "products"), where("barcode", "==", barcode));
-        const querySnapshot = await getDocs(q);
-        
-        if (querySnapshot.empty) {
-          addDoc(collection(db, "products"), productData).catch(console.warn);
-        }
-      } catch (dbError) {
-        console.warn('Firebase operation failed:', dbError);
-      }
+      // Save to Firebase in background without awaiting
+      saveToFirebase(productData);
 
       return productData;
     }
-    throw new Error('Product not found in database');
+    throw new Error('Product not found');
   } catch (error) {
-    console.warn('Error fetching product:', error);
+    // Try Firebase as fallback
+    try {
+      const q = query(collection(db, "products"), where("barcode", "==", barcode));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        return querySnapshot.docs[0].data();
+      }
+    } catch (dbError) {
+      console.warn('Firebase fallback failed:', dbError);
+    }
+
     throw new Error('Unable to find product information');
   }
 };
 
+// Background save to Firebase
+const saveToFirebase = async (productData) => {
+  try {
+    const q = query(collection(db, "products"), where("barcode", "==", productData.barcode));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      await addDoc(collection(db, "products"), productData);
+    }
+  } catch (error) {
+    console.warn('Failed to save to Firebase:', error);
+  }
+};
+
 export const analyzeIngredients = async (ingredients, userAllergies) => {
-  // If no ingredients, return basic response
+  // Start with basic analysis immediately
+  const basicAnalysis = performBasicAnalysis(ingredients, userAllergies);
+
+  // Return basic analysis if no ingredients or allergies
+  if (!ingredients || 
+      ingredients === 'No ingredients information available' || 
+      !userAllergies?.length) {
+    return basicAnalysis;
+  }
+
+  try {
+    // Try AI analysis with timeout
+    const aiAnalysisPromise = new Promise(async (resolve, reject) => {
+      try {
+        const prompt = `
+          Analyze these ingredients: "${ingredients}"
+          For a person with these allergies/conditions: "${userAllergies.join(', ')}"
+          Provide safety assessment (GREEN/YELLOW/RED) and explanation.
+          Format as JSON with: safety_score, warnings (array), safety_explanation
+        `;
+
+        const completion = await openai.chat.completions.create({
+          messages: [{ role: "user", content: prompt }],
+          model: "gpt-3.5-turbo",
+          response_format: { type: "json_object" },
+        });
+
+        const aiAnalysis = JSON.parse(completion.choices[0].message.content);
+        resolve({
+          score: aiAnalysis.safety_score.toLowerCase(),
+          warnings: aiAnalysis.warnings,
+          safetyDetails: aiAnalysis.safety_explanation
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+
+    // Race between AI analysis and timeout
+    const analysis = await Promise.race([
+      aiAnalysisPromise,
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('AI analysis timeout')), 3000)
+      )
+    ]);
+
+    return analysis;
+  } catch (error) {
+    console.warn('AI analysis failed or timed out, using basic analysis:', error);
+    return basicAnalysis;
+  }
+};
+
+function performBasicAnalysis(ingredients, userAllergies) {
   if (!ingredients || ingredients === 'No ingredients information available') {
     return {
       score: 'yellow',
@@ -53,79 +127,40 @@ export const analyzeIngredients = async (ingredients, userAllergies) => {
     };
   }
 
-  try {
-    // First try basic analysis without AI
-    const basicAnalysis = performBasicAnalysis(ingredients, userAllergies);
-
-    // If OpenAI is available, try to get more detailed analysis
-    try {
-      const prompt = `
-        Analyze these ingredients: "${ingredients}"
-        For a person with these allergies/conditions: "${userAllergies.join(', ')}"
-        Provide safety assessment (GREEN/YELLOW/RED) and explanation.
-        Format as JSON with: safety_score, warnings (array), safety_explanation
-      `;
-
-      const completion = await openai.chat.completions.create({
-        messages: [{ role: "user", content: prompt }],
-        model: "gpt-3.5-turbo",
-        response_format: { type: "json_object" },
-      });
-
-      const aiAnalysis = JSON.parse(completion.choices[0].message.content);
-      return {
-        score: aiAnalysis.safety_score.toLowerCase(),
-        warnings: aiAnalysis.warnings,
-        safetyDetails: aiAnalysis.safety_explanation
-      };
-    } catch (aiError) {
-      console.warn('AI analysis failed, using basic analysis:', aiError);
-      return basicAnalysis;
-    }
-  } catch (error) {
-    console.warn('Analysis error:', error);
-    return {
-      score: 'yellow',
-      warnings: ['Error analyzing ingredients'],
-      safetyDetails: 'Please check ingredients manually'
-    };
-  }
-};
-
-function performBasicAnalysis(ingredients, userAllergies) {
   const ingredientsList = ingredients.toLowerCase().split(/[,;()]/);
   const warnings = [];
   let score = 'green';
 
-  // Common allergen keywords
   const commonAllergens = [
     'milk', 'dairy', 'egg', 'nuts', 'peanut', 'soy', 'wheat', 
     'gluten', 'fish', 'shellfish', 'sesame'
   ];
 
-  // Check user allergies
-  userAllergies.forEach(allergy => {
-    const allergyLower = allergy.toLowerCase().trim();
-    if (ingredientsList.some(ing => ing.trim().includes(allergyLower))) {
-      warnings.push(`Contains ${allergy}`);
-      score = 'red';
-    }
-  });
-
-  // Check common allergens if no specific allergies found
-  if (warnings.length === 0) {
-    commonAllergens.forEach(allergen => {
-      if (ingredientsList.some(ing => ing.trim().includes(allergen))) {
-        warnings.push(`Contains common allergen: ${allergen}`);
-        score = 'yellow';
+  // Check user allergies first
+  if (userAllergies?.length) {
+    userAllergies.forEach(allergy => {
+      const allergyLower = allergy.toLowerCase().trim();
+      if (ingredientsList.some(ing => ing.trim().includes(allergyLower))) {
+        warnings.push(`Contains ${allergy}`);
+        score = 'red';
       }
     });
   }
 
+  // Check common allergens
+  commonAllergens.forEach(allergen => {
+    if (ingredientsList.some(ing => ing.trim().includes(allergen))) {
+      if (!warnings.some(w => w.toLowerCase().includes(allergen))) {
+        warnings.push(`Contains common allergen: ${allergen}`);
+        if (score !== 'red') score = 'yellow';
+      }
+    }
+  });
+
   // Check for "may contain" statements
   if (ingredients.toLowerCase().includes('may contain')) {
     warnings.push('Product has cross-contamination warnings');
-    score = score === 'red' ? 'red' : 'yellow';
+    if (score !== 'red') score = 'yellow';
   }
 
   return {
