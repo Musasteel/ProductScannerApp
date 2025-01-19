@@ -1,115 +1,68 @@
-import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
-import React, { useState } from 'react';
-import { Camera } from 'expo-camera';
-const Index = () => {
-  const [hasPermission, setHasPermission] = useState(null);
-  const [scanning, setScanning] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from "react-native";
+import { Stack, router } from "expo-router";
+import { useCameraPermissions } from "expo-camera";
 
-  // Request camera permission when component mounts
-  React.useEffect(() => {
-    (async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
-    })();
-  }, []);
+function Index() {
+  const [permission, requestPermission] = useCameraPermissions();
+  const isPermissionGranted = Boolean(permission?.granted);
 
-  const handleBarCodeScanned = async ({ type, data }) => {
-    setScanning(false);
-    // Here we'll add API call to get product info
-    console.log(`Barcode type: ${type}, data: ${data}`);
+  const handleScanPress = async () => {
+    if (!isPermissionGranted) {
+      const permission = await requestPermission();
+      if (!permission.granted) return;
+    }
+    router.push("/scanner");
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Product Scanner</Text>
-      
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search products..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
+    <SafeAreaView style={styles.container}>
+      <Stack.Screen options={{ title: "Home", headerShown: true }} />
+      <View style={styles.contentContainer}>
+        <Text style={styles.title}>Product Scanner</Text>
+        <TouchableOpacity 
+          style={[styles.scanButton, !isPermissionGranted && styles.scanButtonDisabled]} 
+          onPress={handleScanPress}
+        >
+          <Text style={styles.scanButtonText}>Scan Item</Text>
+        </TouchableOpacity>
       </View>
-
-      {/* Scanner Button */}
-      <TouchableOpacity 
-        style={styles.scanButton}
-        onPress={() => setScanning(true)}>
-        <Text style={styles.scanButtonText}>Scan Product</Text>
-      </TouchableOpacity>
-
-      {/* Scanner Modal */}
-      {scanning && (
-        <View style={styles.scannerContainer}>
-          <Camera
-            onBarCodeScanned={handleBarCodeScanned}
-            barCodeScannerSettings={{
-              barCodeTypes: ['ean13', 'ean8', 'upc'],
-            }}
-            style={StyleSheet.absoluteFillObject}
-          />
-          <TouchableOpacity 
-            style={styles.cancelButton}
-            onPress={() => setScanning(false)}>
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
+    </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
+    backgroundColor: "#fff",
+  },
+  contentContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
   },
   title: {
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: 'bold',
-    textAlign: 'center',
-    marginTop: 50,
-    marginBottom: 20,
-  },
-  searchContainer: {
-    marginBottom: 20,
-  },
-  searchInput: {
-    height: 40,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 10,
+    marginBottom: 40,
+    color: '#000',
   },
   scanButton: {
     backgroundColor: '#007AFF',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 300,
+  },
+  scanButtonDisabled: {
+    opacity: 0.5,
   },
   scanButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
-  },
-  scannerContainer: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'black',
-  },
-  cancelButton: {
-    position: 'absolute',
-    bottom: 50,
-    alignSelf: 'center',
-    backgroundColor: 'white',
-    padding: 15,
-    borderRadius: 8,
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });
 

@@ -1,20 +1,33 @@
 import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { saveAllergies, getAllergies } from '../../utils/storage';
 
 const Profile = () => {
   const [allergies, setAllergies] = useState([]);
   const [newAllergy, setNewAllergy] = useState('');
 
-  const addAllergy = () => {
+  useEffect(() => {
+    loadAllergies();
+  }, []);
+
+  const loadAllergies = async () => {
+    const savedAllergies = await getAllergies();
+    setAllergies(savedAllergies);
+  };
+
+  const addAllergy = async () => {
     if (newAllergy.trim()) {
-      setAllergies([...allergies, newAllergy.trim()]);
+      const updatedAllergies = [...allergies, newAllergy.trim()];
+      setAllergies(updatedAllergies);
+      await saveAllergies(updatedAllergies);
       setNewAllergy('');
     }
   };
 
-  const removeAllergy = (index) => {
+  const removeAllergy = async (index) => {
     const updatedAllergies = allergies.filter((_, i) => i !== index);
     setAllergies(updatedAllergies);
+    await saveAllergies(updatedAllergies);
   };
 
   return (
