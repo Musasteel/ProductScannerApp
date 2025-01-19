@@ -42,3 +42,5 @@ app-example
 env.js
 
 firebase.js
+
+config.js

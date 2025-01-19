@@ -13,7 +13,7 @@ const SEVERITY_COLORS = {
   red: '#F44336',
 };
 
-export default function Results() {
+function Results() {
   const { barcode } = useLocalSearchParams();
   const [product, setProduct] = useState(null);
   const [analysis, setAnalysis] = useState(null);
@@ -160,6 +160,8 @@ export default function Results() {
     </ScrollView>
   );
 }
+
+export default Results;
 
 const styles = StyleSheet.create({
   container: {

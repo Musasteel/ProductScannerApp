@@ -1,11 +1,10 @@
-const ENV = require('./env');
-
 module.exports = {
   expo: {
     name: "PrdctScnr",
-    // ... other expo config
+    scheme: "prdctscnr",
+    newArchEnabled: true,
     extra: {
-      openaiApiKey: ENV.openaiApiKey,
+      groqApiKey: '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'  // API key directly in config
     },
   },
 };

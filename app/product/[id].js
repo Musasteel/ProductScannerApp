@@ -3,7 +3,7 @@ import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { searchProduct } from '../../services/productService';
 
-export default function ProductScreen() {
+function ProductDetails() {
   const { id } = useLocalSearchParams();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,6 +37,8 @@ export default function ProductScreen() {
     </ScrollView>
   );
 }
+
+export default ProductDetails;
 
 const styles = StyleSheet.create({
   container: {
