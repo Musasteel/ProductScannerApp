@@ -14,11 +14,12 @@ const SEVERITY_COLORS = {
 };
 
 function Results() {
-  const { barcode } = useLocalSearchParams();
+  const { barcode, search } = useLocalSearchParams();
   const [product, setProduct] = useState(null);
   const [analysis, setAnalysis] = useState(null);
   const [error, setError] = useState(null);
   const [timeoutOccurred, setTimeoutOccurred] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let timeoutId;
@@ -26,6 +27,7 @@ function Results() {
 
     const loadProductData = async () => {
       try {
+        setLoading(true);
         // Set timeout
         timeoutId = setTimeout(() => {
           if (isMounted && !product) {
@@ -35,7 +37,7 @@ function Results() {
         }, API_TIMEOUT);
 
         // Load product data
-        const productData = await searchProduct(barcode);
+        const productData = await searchProduct(barcode || search);
         if (!isMounted) return;
         
         setProduct(productData);
@@ -55,6 +57,7 @@ function Results() {
         setError(err.message);
       } finally {
         clearTimeout(timeoutId);
+        setLoading(false);
       }
     };
 
@@ -65,7 +68,7 @@ function Results() {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [barcode]);
+  }, [barcode, search]);
 
   const handleRetry = () => {
     setError(null);

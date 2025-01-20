@@ -24,22 +24,21 @@ const getGroqInstance = () => {
   return new Groq({ GROQ_API_KEY });
 };
 
-export const searchProduct = async (barcode) => {
+export const searchProduct = async (query) => {
   try {
-    const response = await axios.get(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
-    
-    if (response.data.status === 1) {
-      const productData = {
-        barcode,
-        name: response.data.product.product_name || 'Unknown Product',
-        ingredients: response.data.product.ingredients_text || 'No ingredients information available',
-        image: response.data.product.image_url,
-        allergens: response.data.product.allergens_tags || [],
-      };
-
-      // Save to Firebase in background
-      saveToFirebase(productData);
-      return productData;
+    // If query is a barcode (numbers only)
+    if (/^\d+$/.test(query)) {
+      const response = await axios.get(`https://world.openfoodfacts.org/api/v0/product/${query}.json`);
+      if (response.data.status === 1) {
+        return formatProductData(response.data.product);
+      }
+    } 
+    // If query is a text search
+    else {
+      const response = await axios.get(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=true`);
+      if (response.data.products && response.data.products.length > 0) {
+        return formatProductData(response.data.products[0]);
+      }
     }
     throw new Error('Product not found');
   } catch (error) {
@@ -47,6 +46,14 @@ export const searchProduct = async (barcode) => {
     throw new Error('Unable to find product information');
   }
 };
+
+const formatProductData = (product) => ({
+  barcode: product.code,
+  name: product.product_name || 'Unknown Product',
+  ingredients: product.ingredients_text || 'No ingredients information available',
+  image: product.image_url,
+  allergens: product.allergens_tags || [],
+});
 
 export const analyzeIngredients = async (ingredients, userAllergies) => {
   if (!ingredients || ingredients === 'No ingredients information available') {
