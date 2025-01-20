@@ -12,7 +12,7 @@
     "**/*.ts",
     "**/*.tsx",
     "app/(tabs)/explore.js",
-    "app/(tabs)/index.js",
-    "app/(tabs)/index.js"
+    "app/(tabs)/index.tsx",
+    "app/(tabs)/index.tsx"
   ]
 }

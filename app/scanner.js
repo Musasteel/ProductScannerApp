@@ -8,7 +8,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from "react-native";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Ionicons } from '@expo/vector-icons';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -19,14 +19,25 @@ const SCAN_AREA_HEIGHT = SCAN_AREA_SIZE * 0.7;
 function Scanner() {
   const scanLock = useRef(false);
   const [scanning, setScanning] = useState(false);
+  const [isActive, setIsActive] = useState(true);
+
+  useEffect(() => {
+    // Cleanup function when component unmounts
+    return () => {
+      scanLock.current = false;
+      setScanning(false);
+      setIsActive(false);
+    };
+  }, []);
 
   const handleBarCodeScanned = async ({ data }) => {
-    if (data && !scanLock.current) {
+    if (data && !scanLock.current && isActive) {
       scanLock.current = true;
       setScanning(true);
+      setIsActive(false);
       
-      // Navigate to results immediately with the barcode
-      router.push({
+      // Navigate and unmount scanner
+      router.replace({
         pathname: "/results",
         params: { barcode: data }
       });
@@ -41,47 +52,52 @@ function Scanner() {
           presentation: 'modal',
         }}
       />
-      <CameraView
-        style={StyleSheet.absoluteFillObject}
-        onBarcodeScanned={scanning ? undefined : handleBarCodeScanned}
-        barcodeScannerSettings={{
-          barcodeTypes: ["ean13", "ean8"],
-        }}
-      >
-        <View style={styles.overlay}>
-          {/* Top overlay */}
-          <View style={[styles.overlaySection, { height: (SCREEN_HEIGHT - SCAN_AREA_HEIGHT) / 2 }]} />
-          
-          {/* Middle section with scan area */}
-          <View style={styles.middleSection}>
-            <View style={styles.overlaySection} />
-            <View style={styles.scanArea}>
-              <View style={styles.scanAreaBorder} />
-              <Text style={styles.scanText}>
-                {scanning ? 'Product found!' : 'Position bar code in this frame'}
-              </Text>
-              {scanning && (
-                <ActivityIndicator 
-                  size="large" 
-                  color="#fff" 
-                  style={styles.spinner}
-                />
-              )}
-            </View>
-            <View style={styles.overlaySection} />
-          </View>
-
-          {/* Bottom overlay */}
-          <View style={[styles.overlaySection, { height: (SCREEN_HEIGHT - SCAN_AREA_HEIGHT) / 2 }]} />
-        </View>
-        
-        <TouchableOpacity 
-          style={styles.closeButton} 
-          onPress={() => router.back()}
+      {isActive && (
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          onBarcodeScanned={scanning ? undefined : handleBarCodeScanned}
+          barcodeScannerSettings={{
+            barcodeTypes: ["ean13", "ean8"],
+          }}
         >
-          <Ionicons name="close" size={28} color="white" />
-        </TouchableOpacity>
-      </CameraView>
+          <View style={styles.overlay}>
+            {/* Top overlay */}
+            <View style={[styles.overlaySection, { height: (SCREEN_HEIGHT - SCAN_AREA_HEIGHT) / 2 }]} />
+            
+            {/* Middle section with scan area */}
+            <View style={styles.middleSection}>
+              <View style={styles.overlaySection} />
+              <View style={styles.scanArea}>
+                <View style={styles.scanAreaBorder} />
+                <Text style={styles.scanText}>
+                  {scanning ? 'Product found!' : 'Position bar code in this frame'}
+                </Text>
+                {scanning && (
+                  <ActivityIndicator 
+                    size="large" 
+                    color="#fff" 
+                    style={styles.spinner}
+                  />
+                )}
+              </View>
+              <View style={styles.overlaySection} />
+            </View>
+
+            {/* Bottom overlay */}
+            <View style={[styles.overlaySection, { height: (SCREEN_HEIGHT - SCAN_AREA_HEIGHT) / 2 }]} />
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.closeButton} 
+            onPress={() => {
+              setIsActive(false);
+              router.back();
+            }}
+          >
+            <Ionicons name="close" size={28} color="white" />
+          </TouchableOpacity>
+        </CameraView>
+      )}
     </View>
   );
 }

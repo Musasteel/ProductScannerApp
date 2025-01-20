@@ -13,8 +13,7 @@ console.log('Full extra object:', Constants.expoConfig?.extra);
 
 // Create a function to get a new Groq instance each time
 const getGroqInstance = () => {
-  // Use the API key directly
-  const GROQ_API_KEY = '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';
+  const GROQ_API_KEY = Constants.expoConfig?.extra;
   
   console.log('Using direct API key:', !!GROQ_API_KEY);
   
